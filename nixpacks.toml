@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["ffmpeg-full", "yt-dlp"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[start]
+cmd = "node index.js"
