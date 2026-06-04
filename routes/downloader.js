@@ -20,20 +20,50 @@ const BASE_URL = () => process.env.RAILWAY_PUBLIC_DOMAIN
 
 // YouTube blocks datacenter IPs with a bot check. Passing cookies from a
 // logged-in (throwaway) account bypasses it. Cookies are provided via env var
-// so they're never committed. Prefer YTDLP_COOKIES_B64 (base64 of cookies.txt)
-// because Railway can mangle the literal tabs/newlines the Netscape format needs.
+// so they're never committed. We accept either base64 (YTDLP_COOKIES_B64,
+// preferred) or raw text (YTDLP_COOKIES), and auto-detect which one was pasted
+// so it works even if the user mixes them up.
+
+// A Netscape cookie file has the header comment and/or tab-separated rows.
+function looksLikeCookieFile(text) {
+  if (!text) return false;
+  return /# ?(Netscape |HTTP )?Cookie File/i.test(text)
+      || /\t(TRUE|FALSE)\t/i.test(text)
+      || (text.indexOf("\t") !== -1 && /youtube|google/i.test(text));
+}
+
+// Return valid cookie-file text from the env (decoding base64 if needed), or null.
+function resolveCookieContent() {
+  const b64 = process.env.YTDLP_COOKIES_B64;
+  const raw = process.env.YTDLP_COOKIES;
+  // 1) try base64-decoding either var
+  for (const v of [b64, raw]) {
+    if (!v) continue;
+    try {
+      const dec = Buffer.from(v.replace(/\s+/g, ""), "base64").toString("utf8");
+      if (looksLikeCookieFile(dec)) return dec;
+    } catch (e) {}
+  }
+  // 2) try the value verbatim (pasted as raw cookies.txt)
+  for (const v of [raw, b64]) {
+    if (looksLikeCookieFile(v)) return v;
+  }
+  return null;
+}
+
 let _cookiesState = null; // null=unchecked, false=none, string=path
 function cookiesArg() {
   if (_cookiesState === false) return "";
   if (typeof _cookiesState === "string") return `--cookies "${_cookiesState}"`;
 
-  let content = null;
-  if (process.env.YTDLP_COOKIES_B64) {
-    try { content = Buffer.from(process.env.YTDLP_COOKIES_B64, "base64").toString("utf8"); } catch (e) {}
-  } else if (process.env.YTDLP_COOKIES) {
-    content = process.env.YTDLP_COOKIES;
+  const content = resolveCookieContent();
+  if (!content) {
+    if (process.env.YTDLP_COOKIES_B64 || process.env.YTDLP_COOKIES) {
+      console.error("[downloader] Cookies env is set but is not valid base64 OR raw Netscape cookies.");
+    }
+    _cookiesState = false;
+    return "";
   }
-  if (!content || !content.trim()) { _cookiesState = false; return ""; }
 
   try {
     const p = path.join(os.tmpdir(), "yt-cookies.txt");
@@ -55,6 +85,7 @@ router.get("/diag", function(req, res) {
       ytdlp_path: YTDLP,
       version: (stdout || "").trim() || null,
       cookies_configured: !!(process.env.YTDLP_COOKIES_B64 || process.env.YTDLP_COOKIES),
+      cookies_valid: resolveCookieContent() !== null,
       cookies_active: cookiesArg() !== "",
       error: err ? (stderr || err.message || "").slice(0, 400) : null,
     });
