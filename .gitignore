@@ -1,6 +1,7 @@
 node_modules
 uploads
 output
+bin
 .env
 .env.*
 test-download.js

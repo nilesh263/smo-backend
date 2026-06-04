@@ -7,12 +7,15 @@ const { v4: uuidv4 } = require("uuid");
 const router = express.Router();
 
 const isWindows = process.platform === "win32";
-const YTDLP  = isWindows 
+const YTDLP  = isWindows
   ? "C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\yt-dlp.exe"
-  : "yt-dlp";
-const FFMPEG = isWindows
-  ? "C:\\Users\\Admin\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1.1-full_build\\bin\\ffmpeg.exe"
-  : "ffmpeg";
+  : path.join(__dirname, "..", "bin", "yt-dlp");
+// Use the npm-bundled ffmpeg binary (works on every host, no system install needed)
+const FFMPEG = require("@ffmpeg-installer/ffmpeg").path;
+
+const BASE_URL = () => process.env.RAILWAY_PUBLIC_DOMAIN
+  ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN
+  : "http://localhost:" + (process.env.PORT || 4000);
 
 // TEMP diagnostic — yt-dlp availability/version on the host
 router.get("/diag", function(req, res) {
@@ -104,7 +107,7 @@ router.post("/download", function(req, res) {
 
     res.json({
       success:          true,
-      downloadUrl:      "http://localhost:4000/download/" + filename,
+      downloadUrl:      BASE_URL() + "/download/" + filename,
       downloadFilename: isAudio ? "audio.mp3" : "video." + ext,
       size,
     });
