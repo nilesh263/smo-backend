@@ -2,6 +2,7 @@ const express = require("express");
 const { exec } = require("child_process");
 const path    = require("path");
 const fs      = require("fs");
+const os      = require("os");
 const { v4: uuidv4 } = require("uuid");
 
 const router = express.Router();
@@ -17,12 +18,44 @@ const BASE_URL = () => process.env.RAILWAY_PUBLIC_DOMAIN
   ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN
   : "http://localhost:" + (process.env.PORT || 4000);
 
+// YouTube blocks datacenter IPs with a bot check. Passing cookies from a
+// logged-in (throwaway) account bypasses it. Cookies are provided via env var
+// so they're never committed. Prefer YTDLP_COOKIES_B64 (base64 of cookies.txt)
+// because Railway can mangle the literal tabs/newlines the Netscape format needs.
+let _cookiesState = null; // null=unchecked, false=none, string=path
+function cookiesArg() {
+  if (_cookiesState === false) return "";
+  if (typeof _cookiesState === "string") return `--cookies "${_cookiesState}"`;
+
+  let content = null;
+  if (process.env.YTDLP_COOKIES_B64) {
+    try { content = Buffer.from(process.env.YTDLP_COOKIES_B64, "base64").toString("utf8"); } catch (e) {}
+  } else if (process.env.YTDLP_COOKIES) {
+    content = process.env.YTDLP_COOKIES;
+  }
+  if (!content || !content.trim()) { _cookiesState = false; return ""; }
+
+  try {
+    const p = path.join(os.tmpdir(), "yt-cookies.txt");
+    fs.writeFileSync(p, content, { mode: 0o600 });
+    _cookiesState = p;
+    console.log("[downloader] Using YouTube cookies from env at", p);
+    return `--cookies "${p}"`;
+  } catch (e) {
+    console.error("[downloader] Failed to write cookies file:", e.message);
+    _cookiesState = false;
+    return "";
+  }
+}
+
 // TEMP diagnostic — yt-dlp availability/version on the host
 router.get("/diag", function(req, res) {
   exec(`"${YTDLP}" --version`, { timeout: 15000 }, function(err, stdout, stderr) {
     res.json({
       ytdlp_path: YTDLP,
       version: (stdout || "").trim() || null,
+      cookies_configured: !!(process.env.YTDLP_COOKIES_B64 || process.env.YTDLP_COOKIES),
+      cookies_active: cookiesArg() !== "",
       error: err ? (stderr || err.message || "").slice(0, 400) : null,
     });
   });
@@ -33,7 +66,7 @@ router.post("/info", function(req, res) {
   var url = req.body.url;
   if (!url) return res.status(400).json({ error: "No URL provided" });
 
-  var cmd = `"${YTDLP}" --dump-json --no-playlist "${url}"`;
+  var cmd = `"${YTDLP}" ${cookiesArg()} --dump-json --no-playlist "${url}"`;
   console.log("Fetching info:", url);
 
   exec(cmd, { timeout: 30000 }, function(err, stdout, stderr) {
@@ -74,16 +107,17 @@ router.post("/download", function(req, res) {
   var isAudio        = format === "bestaudio";
   var cmd;
 
+  var ck = cookiesArg();
   if (isAudio) {
     // Extract audio as MP3
-    cmd = `"${YTDLP}" -f bestaudio --extract-audio --audio-format mp3 --audio-quality 192k --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
+    cmd = `"${YTDLP}" ${ck} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 192k --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
   } else if (format === "best_aac") {
     // Best video + re-encode audio to AAC so it plays on all devices
-    cmd = `"${YTDLP}" -f "bestvideo+bestaudio/best" --merge-output-format mp4 --postprocessor-args "ffmpeg:-c:v copy -c:a aac -b:a 192k" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
+    cmd = `"${YTDLP}" ${ck} -f "bestvideo+bestaudio/best" --merge-output-format mp4 --postprocessor-args "ffmpeg:-c:v copy -c:a aac -b:a 192k" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
   } else if (format === "worst") {
-    cmd = `"${YTDLP}" -f "worstvideo+worstaudio/worst" --merge-output-format mp4 --postprocessor-args "ffmpeg:-c:v copy -c:a aac -b:a 128k" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
+    cmd = `"${YTDLP}" ${ck} -f "worstvideo+worstaudio/worst" --merge-output-format mp4 --postprocessor-args "ffmpeg:-c:v copy -c:a aac -b:a 128k" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
   } else {
-    cmd = `"${YTDLP}" -f "best" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
+    cmd = `"${YTDLP}" ${ck} -f "best" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
   }
 
   console.log("Downloading:", url, "format:", format);
