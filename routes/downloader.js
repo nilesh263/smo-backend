@@ -14,6 +14,17 @@ const FFMPEG = isWindows
   ? "C:\\Users\\Admin\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1.1-full_build\\bin\\ffmpeg.exe"
   : "ffmpeg";
 
+// TEMP diagnostic — yt-dlp availability/version on the host
+router.get("/diag", function(req, res) {
+  exec(`"${YTDLP}" --version`, { timeout: 15000 }, function(err, stdout, stderr) {
+    res.json({
+      ytdlp_path: YTDLP,
+      version: (stdout || "").trim() || null,
+      error: err ? (stderr || err.message || "").slice(0, 400) : null,
+    });
+  });
+});
+
 // Get video info
 router.post("/info", function(req, res) {
   var url = req.body.url;
@@ -25,7 +36,7 @@ router.post("/info", function(req, res) {
   exec(cmd, { timeout: 30000 }, function(err, stdout, stderr) {
     if (err) {
       console.error("yt-dlp error:", stderr);
-      return res.status(500).json({ error: "Could not fetch video info. Check URL." });
+      return res.status(500).json({ error: "Could not fetch video info. Check URL.", detail: (stderr || err.message || "").slice(0, 600) });
     }
     try {
       var info = JSON.parse(stdout);
