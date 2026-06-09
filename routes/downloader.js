@@ -18,6 +18,11 @@ const BASE_URL = () => process.env.RAILWAY_PUBLIC_DOMAIN
   ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN
   : "http://localhost:" + (process.env.PORT || 4000);
 
+// Newer yt-dlp needs a JavaScript runtime to solve YouTube's challenges.
+// Reuse the Node binary we're already running on (no extra download), and allow
+// fetching the challenge-solver component so more/higher formats are available.
+const JS_ARGS = `--js-runtimes "node:${process.execPath}" --remote-components ejs:github`;
+
 // YouTube blocks datacenter IPs with a bot check. Passing cookies from a
 // logged-in (throwaway) account bypasses it. Cookies are provided via env var
 // so they're never committed. We accept either base64 (YTDLP_COOKIES_B64,
@@ -97,7 +102,7 @@ router.post("/info", function(req, res) {
   var url = req.body.url;
   if (!url) return res.status(400).json({ error: "No URL provided" });
 
-  var cmd = `"${YTDLP}" ${cookiesArg()} --dump-json --no-playlist "${url}"`;
+  var cmd = `"${YTDLP}" ${cookiesArg()} ${JS_ARGS} --dump-json --no-playlist "${url}"`;
   console.log("Fetching info:", url);
 
   exec(cmd, { timeout: 30000 }, function(err, stdout, stderr) {
@@ -141,14 +146,14 @@ router.post("/download", function(req, res) {
   var ck = cookiesArg();
   if (isAudio) {
     // Extract audio as MP3
-    cmd = `"${YTDLP}" ${ck} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 192k --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
+    cmd = `"${YTDLP}" ${ck} ${JS_ARGS} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 192k --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
   } else if (format === "best_aac") {
     // Best video + re-encode audio to AAC so it plays on all devices
-    cmd = `"${YTDLP}" ${ck} -f "bestvideo+bestaudio/best" --merge-output-format mp4 --postprocessor-args "ffmpeg:-c:v copy -c:a aac -b:a 192k" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
+    cmd = `"${YTDLP}" ${ck} ${JS_ARGS} -f "bestvideo+bestaudio/best" --merge-output-format mp4 --postprocessor-args "ffmpeg:-c:v copy -c:a aac -b:a 192k" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
   } else if (format === "worst") {
-    cmd = `"${YTDLP}" ${ck} -f "worstvideo+worstaudio/worst" --merge-output-format mp4 --postprocessor-args "ffmpeg:-c:v copy -c:a aac -b:a 128k" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
+    cmd = `"${YTDLP}" ${ck} ${JS_ARGS} -f "worstvideo+worstaudio/worst" --merge-output-format mp4 --postprocessor-args "ffmpeg:-c:v copy -c:a aac -b:a 128k" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
   } else {
-    cmd = `"${YTDLP}" ${ck} -f "best" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
+    cmd = `"${YTDLP}" ${ck} ${JS_ARGS} -f "best" --ffmpeg-location "${FFMPEG}" -o "${outputTemplate}" --no-playlist "${url}"`;
   }
 
   console.log("Downloading:", url, "format:", format);
