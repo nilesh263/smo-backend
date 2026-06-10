@@ -18,18 +18,6 @@ app.use(express.json());
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 });
 
-// Dump ALL env var names
-app.get("/debug-env", (req, res) => {
-  const allKeys = Object.keys(process.env).sort();
-  res.json({
-    total_vars: allKeys.length,
-    all_keys: allKeys,
-    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || "MISSING",
-    CLOUDINARY_API_KEY:    process.env.CLOUDINARY_API_KEY    || "MISSING",
-    CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? "SET" : "MISSING",
-  });
-});
-
 // Thumbnail proxy
 app.get("/api/proxy/thumbnail", function(req, res) {
   var imageUrl = String(req.query.url || "");
