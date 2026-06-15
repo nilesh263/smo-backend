@@ -91,7 +91,9 @@ router.post("/info", function(req, res) {
   var cmd = `"${YTDLP}" ${cookiesArg()} ${JS_ARGS} --dump-json --no-playlist "${url}"`;
   console.log("Fetching info:", url);
 
-  exec(cmd, { timeout: 30000 }, function(err, stdout, stderr) {
+  // maxBuffer must be large: --dump-json for videos with many formats can
+  // exceed Node's default 1MB stdout limit, which would fail the whole fetch.
+  exec(cmd, { timeout: 60000, maxBuffer: 1024 * 1024 * 64 }, function(err, stdout, stderr) {
     if (err) {
       console.error("yt-dlp error:", stderr);
       return res.status(500).json({ error: "Could not fetch video info. Check URL." });
