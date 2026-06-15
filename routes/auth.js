@@ -53,4 +53,23 @@ router.post("/login", async function (req, res) {
   res.json({ id: user.id, name: user.name, email: user.email });
 });
 
+// POST /api/auth/reset
+// NOTE: simple reset with no email verification — by design (casual app, tools
+// work in guest mode). Anyone who knows an email could reset it; swap for an
+// email-link flow if real account security is ever needed.
+router.post("/reset", async function (req, res) {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: "Email and new password are required" });
+  if (String(password).length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+
+  const e = String(email).trim().toLowerCase();
+  const users = loadUsers();
+  const user = users.find(u => u.email === e);
+  if (!user) return res.status(404).json({ error: "No account found with this email" });
+
+  user.password = await bcrypt.hash(String(password), 10);
+  saveUsers(users);
+  res.json({ success: true });
+});
+
 module.exports = router;
