@@ -42,6 +42,7 @@ app.get("/download/:filename", (req, res) => {
 
 app.use("/output", express.static(path.join(__dirname, "output")));
 
+app.use("/api/auth",       require("./routes/auth"));
 app.use("/api/image",      require("./routes/image"));
 app.use("/api/video",      require("./routes/video"));
 app.use("/api/gif",        require("./routes/gif"));
