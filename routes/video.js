@@ -22,10 +22,10 @@ const BASE_URL = () => process.env.RAILWAY_PUBLIC_DOMAIN
   ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN
   : "http://localhost:" + (process.env.PORT || 4000);
 
-// Compress with libx264 at the requested CRF, capping the resolution to a box
-// (only ever downscaling). Done with the bundled ffmpeg — no external service,
-// so it can't fail on credentials and reliably reduces file size.
-function compressVideo(inputPath, outputPath, crf, maxDim) {
+// Compress with libx264 at the requested CRF. Keeps the ORIGINAL resolution —
+// only re-encodes for a smaller file. Done with the bundled ffmpeg, so it needs
+// no external service or API key.
+function compressVideo(inputPath, outputPath, crf) {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .videoCodec("libx264")
@@ -36,8 +36,8 @@ function compressVideo(inputPath, outputPath, crf, maxDim) {
         "-preset", "veryfast",
         "-movflags", "+faststart",
         "-pix_fmt", "yuv420p",
-        // fit within maxDim×maxDim keeping aspect (downscale only), then force even dims
-        "-vf", `scale='min(${maxDim},iw)':'min(${maxDim},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`,
+        // keep resolution; only round to even dimensions (required by yuv420p)
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
       ])
       .on("end",   () => resolve())
       .on("error", (err) => reject(err))
@@ -50,10 +50,6 @@ router.post("/compress", upload.single("file"), async function (req, res) {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   const crf = parseInt(req.body.crf, 10) || 23;
-  let maxDim;
-  if      (crf <= 18) maxDim = 1920; // High quality
-  else if (crf <= 23) maxDim = 1280; // Balanced
-  else                maxDim = 854;  // Web optimized
 
   const inputPath    = req.file.path;
   const baseName     = path.basename(req.file.originalname, path.extname(req.file.originalname));
@@ -61,10 +57,10 @@ router.post("/compress", upload.single("file"), async function (req, res) {
   const outputName   = uuidv4() + ".mp4";
   const outputPath   = path.join(__dirname, "../output", outputName);
 
-  console.log("Compressing:", req.file.originalname, "crf:", crf, "cap:", maxDim);
+  console.log("Compressing:", req.file.originalname, "crf:", crf, "(original resolution)");
 
   try {
-    await compressVideo(inputPath, outputPath, crf, maxDim);
+    await compressVideo(inputPath, outputPath, crf);
 
     let compressedSize  = fs.statSync(outputPath).size;
     let servedName      = outputName;
