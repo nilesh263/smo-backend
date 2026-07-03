@@ -83,6 +83,20 @@ function cookiesArg() {
   }
 }
 
+// Run yt-dlp, retrying a few times on failure. YouTube intermittently
+// throttles datacenter IPs (works most of the time, randomly 429s/blocks),
+// so a quick retry usually succeeds where the first attempt failed.
+function execRetry(cmd, opts, retries, cb) {
+  var attempt = function (n) {
+    exec(cmd, opts, function (err, stdout, stderr) {
+      if (!err || n >= retries) return cb(err, stdout, stderr);
+      console.log("yt-dlp attempt " + (n + 1) + " failed, retrying (" + (n + 2) + "/" + (retries + 1) + ")");
+      setTimeout(function () { attempt(n + 1); }, 1500);
+    });
+  };
+  attempt(0);
+}
+
 // Get video info
 router.post("/info", function(req, res) {
   var url = req.body.url;
@@ -92,8 +106,9 @@ router.post("/info", function(req, res) {
   console.log("Fetching info:", url);
 
   // maxBuffer must be large: --dump-json for videos with many formats can
-  // exceed Node's default 1MB stdout limit, which would fail the whole fetch.
-  exec(cmd, { timeout: 60000, maxBuffer: 1024 * 1024 * 64 }, function(err, stdout, stderr) {
+  // exceed Node's default 1MB stdout limit. Retry to ride out YouTube's
+  // intermittent throttling of the server IP.
+  execRetry(cmd, { timeout: 60000, maxBuffer: 1024 * 1024 * 64 }, 3, function(err, stdout, stderr) {
     if (err) {
       console.error("yt-dlp error:", stderr);
       return res.status(500).json({ error: "Could not fetch video info. Check URL." });
@@ -146,7 +161,7 @@ router.post("/download", function(req, res) {
 
   console.log("Downloading:", url, "format:", format);
 
-  exec(cmd, { timeout: 300000, maxBuffer: 1024 * 1024 * 10 }, function(err, stdout, stderr) {
+  execRetry(cmd, { timeout: 300000, maxBuffer: 1024 * 1024 * 10 }, 2, function(err, stdout, stderr) {
     if (err) {
       console.error("Download error:", stderr);
       return res.status(500).json({ error: "Download failed: " + (stderr || err.message).slice(0,300) });
