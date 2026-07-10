@@ -97,6 +97,15 @@ function execRetry(cmd, opts, retries, cb) {
   attempt(0);
 }
 
+// TEMP diagnostic — is the cookies env var present and valid?
+router.get("/diag", function(req, res) {
+  res.json({
+    cookies_env_set: !!(process.env.YTDLP_COOKIES_B64 || process.env.YTDLP_COOKIES),
+    cookies_valid:   resolveCookieContent() !== null,
+    cookies_active:  cookiesArg() !== "",
+  });
+});
+
 // Get video info
 router.post("/info", function(req, res) {
   var url = req.body.url;
