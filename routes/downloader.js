@@ -14,9 +14,7 @@ const YTDLP  = isWindows
 // Use the npm-bundled ffmpeg binary (works on every host, no system install needed)
 const FFMPEG = require("@ffmpeg-installer/ffmpeg").path;
 
-const BASE_URL = () => process.env.RAILWAY_PUBLIC_DOMAIN
-  ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN
-  : "http://localhost:" + (process.env.PORT || 4000);
+const publicBase = require("../lib/publicBase");
 
 // Newer yt-dlp needs a JavaScript runtime to solve YouTube's challenges.
 // Reuse the Node binary we're already running on (no extra download), and allow
@@ -189,7 +187,7 @@ router.post("/download", function(req, res) {
 
     res.json({
       success:          true,
-      downloadUrl:      BASE_URL() + "/download/" + filename,
+      downloadUrl:      publicBase(req) + "/download/" + filename,
       downloadFilename: isAudio ? "audio.mp3" : "video." + ext,
       size,
     });

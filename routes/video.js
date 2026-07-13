@@ -18,9 +18,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 500 * 1024 * 1024 } });
 
-const BASE_URL = () => process.env.RAILWAY_PUBLIC_DOMAIN
-  ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN
-  : "http://localhost:" + (process.env.PORT || 4000);
+const publicBase = require("../lib/publicBase");
 
 // Compress with libx264 at the requested CRF. Keeps the ORIGINAL resolution —
 // only re-encodes for a smaller file. Done with the bundled ffmpeg, so it needs
@@ -84,7 +82,7 @@ router.post("/compress", upload.single("file"), async function (req, res) {
       originalSize,
       compressedSize,
       savings: parseFloat(savings),
-      downloadUrl:      BASE_URL() + "/download/" + servedName,
+      downloadUrl:      publicBase(req) + "/download/" + servedName,
       downloadFilename: servedFilename,
     });
   } catch (err) {
@@ -111,7 +109,7 @@ router.post("/extract-audio", upload.single("file"), function (req, res) {
       if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
       res.json({
         success: true,
-        downloadUrl:      BASE_URL() + "/download/" + outputName,
+        downloadUrl:      publicBase(req) + "/download/" + outputName,
         downloadFilename: baseName + ".mp3",
       });
     })

@@ -17,9 +17,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
 
-const BASE_URL = () => process.env.RAILWAY_PUBLIC_DOMAIN
-  ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN
-  : "http://localhost:" + (process.env.PORT || 4000);
+const publicBase = require("../lib/publicBase");
 
 /**
  * Build a GIF using a memory-safe TWO-PASS palette workflow.
@@ -89,7 +87,7 @@ router.post("/compress", upload.single("file"), function (req, res) {
     const savings = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
     res.json({
       success: true, originalSize, compressedSize, savings: parseFloat(savings),
-      downloadUrl: BASE_URL() + "/download/" + outputName,
+      downloadUrl: publicBase(req) + "/download/" + outputName,
       downloadFilename: baseName + "-compressed.gif",
     });
   });
@@ -111,7 +109,7 @@ router.post("/resize", upload.single("file"), function (req, res) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({
       success: true,
-      downloadUrl: BASE_URL() + "/download/" + outputName,
+      downloadUrl: publicBase(req) + "/download/" + outputName,
       downloadFilename: baseName + "-" + width + "x" + height + ".gif",
     });
   });
@@ -133,7 +131,7 @@ router.post("/video2gif", upload.single("file"), function (req, res) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({
       success: true,
-      downloadUrl: BASE_URL() + "/download/" + outputName,
+      downloadUrl: publicBase(req) + "/download/" + outputName,
       downloadFilename: baseName + ".gif",
     });
   });
